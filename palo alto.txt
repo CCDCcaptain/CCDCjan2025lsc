@@ -1,0 +1,62 @@
+what to do:
+Delete aditional admins 
+change admin password
+do basic hardening
+delete rulebasses
+make a deny deny rule 
+after all this then log into web gui 
+figure out how to disable the api
+
+
+command lines:
+
+set rulebase security rules deny-any from any to any source any destination any application any service any action deny
+MAKE SURE THAT THE DENY IS AT THE BOTTOM
+delete mgt-config users administator 
+set mgt-config users admin password
+
+
+set deviceconfig system service disable-telnet yes
+set deviceconfig system permitted-ip 172.20.242.0/24
+set deviceconfig system login-banner AuthorizedAccessOnlythorizedAccessOnly
+set network profiles zone-protection-profile Default flood icmp enable yes
+set network profiles zone-protection-profile Default flood udp enable yes
+set network profiles zone-protection-profile Default flood other-ip enable yes
+set network profiles zone-protection-profile Default flood icmpv6 enable yes
+
+delete rulebase security rules any2any
+set rulebase security rules PUBLIC2INTERNAL disabled yes
+set rulebase security rules INTERAL2PUBLIC disabled yes
+
+set mgt-config admin-role auditadmin disabled yes
+set mgt-config admin-role cryptoadmin disabled yes
+set mgt-config admin-role securityadmin disabled yes
+set mgt-config admin-role honeypot disabled yes
+set mgt-config admin-role Configuration Admins disabled yes
+set mgt-config admin-role Policy Admins disabled yes
+
+
+
+policy through gui 
+Linux update
+Souce: any 
+Destintion : any 
+application: apt-get, dnf, yum 
+
+then commit
+
+New any any policy 
+Source: any 
+Destination: Any 
+Application: any 
+
+commit
+
+HTTPS
+Source: any 
+Destination: any 
+application: any 
+Service/URL category: Http, Https
+
+commit
+
