@@ -1,0 +1,110 @@
+#!/bin/bash
+
+# Hardening Script for Ubuntu Workstation
+
+# Ensure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root. Exiting."
+  exit 1
+fi
+
+# Update and Upgrade System
+echo "Updating and upgrading the system..."
+sudo apt update && sudo apt upgrade -y
+sudo apt autoremove --purge -y
+
+# Enable and Configure UFW Firewall
+echo "Configuring UFW firewall..."
+sudo apt install ufw -y
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+# Restrict web traffic to 172.20.242.150
+sudo ufw allow from 172.20.242.150 to any port 80
+sudo ufw allow from 172.20.242.150 to any port 443
+sudo ufw enable
+
+# Disable Unused Services
+echo "Disabling unnecessary services..."
+for service in cups apache2 samba; do
+  if systemctl is-enabled --quiet "$service"; then
+    sudo systemctl disable "$service"
+    sudo systemctl stop "$service"
+  fi
+done
+
+# Enforce SSH Security
+echo "Securing SSH configuration..."
+sudo sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+sudo sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+echo "AllowUsers sysadmin" | sudo tee -a /etc/ssh/sshd_config
+sudo systemctl restart sshd
+
+# Install Fail2ban
+echo "Installing and configuring Fail2ban..."
+sudo apt install fail2ban -y
+sudo systemctl enable --now fail2ban
+
+# Enable Automatic Security Updates
+echo "Enabling automatic security updates..."
+sudo apt install unattended-upgrades -y
+sudo dpkg-reconfigure --priority=low unattended-upgrades
+
+# Configure AppArmor
+echo "Configuring AppArmor..."
+sudo systemctl enable apparmor --now
+
+# Harden File System
+echo "Hardening file systems..."
+echo -e "install cramfs /bin/false\ninstall freevxfs /bin/false\ninstall jffs2 /bin/false\ninstall hfs /bin/false\ninstall hfsplus /bin/false\ninstall udf /bin/false" | sudo tee /etc/modprobe.d/disable-filesystems.conf
+sudo modprobe -r cramfs freevxfs jffs2 hfs hfsplus udf
+
+# Configure File System Mount Options
+echo "Configuring file system mount options..."
+sudo sed -i 's/\(\/tmp.*defaults\)/\1,noexec,nosuid,nodev/' /etc/fstab
+sudo sed -i 's/\(\/var\/tmp.*defaults\)/\1,noexec,nosuid,nodev/' /etc/fstab
+sudo sed -i 's/\(\/home.*defaults\)/\1,noexec,nosuid,nodev/' /etc/fstab
+
+# Enforce Password Policy
+echo "Enforcing password policy..."
+sudo apt install libpam-pwquality -y
+cat <<EOF | sudo tee /etc/security/pwquality.conf
+minlen = 12
+minclass = 3
+retry = 3
+EOF
+
+# Lock Root User
+echo "Locking the root user..."
+sudo passwd -l root
+
+# Create Sysadmin User
+echo "Creating and configuring sysadmin user..."
+username="sysadmin"
+if id "$username" &>/dev/null; then
+  echo "User $username already exists."
+else
+  sudo adduser $username
+  sudo usermod -aG sudo $username
+  echo "$username ALL=(ALL) ALL" | sudo tee /etc/sudoers.d/$username
+fi
+
+# Lock All Other Users
+echo "Locking all users except sysadmin..."
+for user in $(cut -d: -f1 /etc/passwd); do
+  if [[ "$user" != "sysadmin" && "$user" != "root" ]]; then
+    sudo passwd -l "$user"
+  fi
+done
+
+# Install and Configure Auditd
+echo "Installing and configuring Auditd..."
+sudo apt install auditd -y
+sudo systemctl enable --now auditd
+
+# Install Lynis for Security Auditing
+echo "Installing Lynis for security auditing..."
+sudo apt install lynis -y
+
+# Final Message
+echo "Hardening complete. It is recommended to reboot the system to apply all changes."
